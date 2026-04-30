@@ -57,11 +57,39 @@ class AcquaintanceController extends Controller
         $user1 = User::find(1);
         $user2 = User::find(2);
 
-        if ($user1->isFriendWith($user2)) {
-            return "They are Friends";
-        }
-
-        return "Not Friends";
+        return $user1->isFriendWith($user2)
+            ? "They are Friends"
+            : "Not Friends";
     }
 
+    // ⭐ EXTRA 1: Friend List
+    public function friendList()
+    {
+        $user = User::find(1);
+
+        return $user->getFriends();
+    }
+
+    // ⭐ EXTRA 2: Following List
+public function followingList()
+{
+    $user = User::find(1);
+
+    return response()->json([
+        'following' => $user->followings
+    ]);
+}
+
+    // ⭐ EXTRA 3: User Status API
+    public function userStatus($id)
+    {
+        $user1 = User::find(1);
+        $user2 = User::find($id);
+
+        return [
+            'is_friend' => $user1->isFriendWith($user2),
+            'is_following' => $user1->isFollowing($user2),
+            'is_liked' => $user1->hasLiked($user2),
+        ];
+    }
 }
