@@ -17,17 +17,22 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="user-switch">
-                            <label class="me-2">Switch User:</label>
-                            @foreach([1,2,3,4,5] as $uid)
-                                @php $u = \App\Models\User::find($uid); @endphp
-                                @if($u)
-                                    <a href="/switch-user/{{ $uid }}" class="btn btn-sm {{ $current_user_id == $uid ? 'btn-primary' : 'btn-outline-secondary' }} me-1">
-                                        {{ $u->name }}
-                                    </a>
-                                @endif
-                            @endforeach
+                    <div class="col-md-6 text-end">
+                        <div class="d-flex align-items-center justify-content-end gap-3">
+                            <a href="/manage-groups" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-folder-plus"></i> Manage Groups
+                            </a>
+                            <div class="user-switch">
+                                <label class="me-2 mb-0">Switch User:</label>
+                                @foreach([1,2,3,4,5] as $uid)
+                                    @php $u = \App\Models\User::find($uid); @endphp
+                                    @if($u)
+                                        <a href="/switch-user/{{ $uid }}" class="btn btn-sm {{ $current_user_id == $uid ? 'btn-primary' : 'btn-outline-secondary' }} me-1">
+                                            {{ $u->name }}
+                                        </a>
+                                    @endif
+                                @endforeach
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -99,13 +104,14 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="fas fa-lightbulb"></i> Friend Suggestions</h5>
+                <h5 class="mb-0"><i class="fas fa-lightbulb"></i> Advanced Friend Suggestions</h5>
             </div>
             <div class="card-body">
                 @forelse($friend_suggestions as $suggestion)
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <strong>{{ $suggestion->name }}</strong>
+                            <span class="badge bg-info ms-2">{{ $suggestion->mutual_count }} Mutual Friends</span>
                             <small class="text-muted d-block">{{ $suggestion->email }}</small>
                         </div>
                         <a href="/send-request/{{ $suggestion->id }}" class="btn btn-sm btn-primary">
