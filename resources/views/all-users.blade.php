@@ -13,6 +13,7 @@
                         <th>User</th>
                         <th>Email</th>
                         <th>Status</th>
+                        <th>Rate User</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -48,6 +49,16 @@
                                 @if($data['is_liked'])
                                     <span class="badge bg-danger">Liked</span>
                                 @endif
+                            </td>
+                            <td>
+                                <form action="/rate-user/{{ $data['user']->id }}" method="GET" class="d-flex align-items-center gap-1">
+                                    <select name="rating" class="form-select form-select-sm" style="width: 75px;">
+                                        @for($i = 1; $i <= 5; $i++)
+                                            <option value="{{ $i }}" {{ (isset($data['rating']) && $data['rating'] == $i) ? 'selected' : '' }}>{{ $i }} ★</option>
+                                        @endfor
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-secondary">Rate</button>
+                                </form>
                             </td>
                             <td>
                                 @if($data['is_blocked'])

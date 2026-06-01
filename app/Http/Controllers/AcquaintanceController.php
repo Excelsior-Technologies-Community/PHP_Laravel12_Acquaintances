@@ -7,20 +7,17 @@ use Illuminate\Http\Request;
 
 class AcquaintanceController extends Controller
 {
-    // Track current user for testing (default: 1)
     protected $currentUserId = 1;
 
-    /**
-     * Get current user
-     */
     private function getCurrentUser()
     {
-        return User::find($this->currentUserId);
+        $user = User::find($this->currentUserId);
+        if (!$user) {
+            $user = User::first();
+        }
+        return $user;
     }
 
-    /**
-     * Switch user for testing
-     */
     public function switchUser($id)
     {
         $user = User::find($id);
@@ -32,9 +29,6 @@ class AcquaintanceController extends Controller
         return redirect()->back()->with('error', 'User not found');
     }
 
-    /**
-     * Get current user info
-     */
     public function currentUser()
     {
         $user = $this->getCurrentUser();
@@ -45,9 +39,6 @@ class AcquaintanceController extends Controller
         ]);
     }
 
-    /**
-     * Dashboard with all data
-     */
     public function dashboard()
     {
         $currentUser = $this->getCurrentUser();
@@ -55,10 +46,10 @@ class AcquaintanceController extends Controller
         $data = [
             'current_user' => $currentUser,
             'friends' => $currentUser->getFriends(),
-            'followings' => $currentUser->getFollowings(),
-            'followers' => $currentUser->getFollowers(),
+            'followings' => $currentUser->followings,
+            'followers' => $currentUser->followers,
             'pending_friend_requests' => $currentUser->getFriendRequests(),
-            'sent_requests' => $currentUser->getSentFriendRequests(),
+            'sent_requests' => collect(),
             'blocked_users' => $currentUser->getBlockedFriendships(),
             'friend_suggestions' => $this->getFriendSuggestionsData(),
             'all_users' => User::where('id', '!=', $currentUser->id)->get(),
@@ -68,33 +59,95 @@ class AcquaintanceController extends Controller
         return view('dashboard', $data);
     }
 
-    /**
-     * Get all users for interaction
-     */
     public function allUsers()
     {
         $currentUser = $this->getCurrentUser();
         $users = User::where('id', '!=', $currentUser->id)->get();
+        $ratedUsers = $currentUser->ratingsTo(User::class)->get()->keyBy('id');
         
         $usersData = [];
         foreach ($users as $user) {
+            $friendship = $currentUser->getFriendship($user);
+            $friendStatus = $friendship ? $friendship->status : 'none';
+            $ratingVal = $ratedUsers->has($user->id) ? $ratedUsers->get($user->id)->pivot->relation_value : 0;
+
             $usersData[] = [
                 'user' => $user,
                 'is_friend' => $currentUser->isFriendWith($user),
-                'friend_status' => $currentUser->getFriendshipStatus($user),
+                'friend_status' => $friendStatus,
                 'is_following' => $currentUser->isFollowing($user),
                 'is_liked' => $currentUser->hasLiked($user),
-                'is_blocked' => $currentUser->isBlocked($user),
+                'is_blocked' => $currentUser->hasBlocked($user),
                 'friend_request_sent' => $currentUser->hasSentFriendRequestTo($user),
-                'friend_request_received' => $currentUser->hasReceivedFriendRequestFrom($user),
+                'friend_request_received' => $currentUser->hasFriendRequestFrom($user),
+                'rating' => $ratingVal,
             ];
         }
         
         return view('all-users', ['usersData' => $usersData, 'current_user' => $currentUser]);
     }
 
-    // ========== FRIEND REQUEST METHODS ==========
-    
+    public function rateUser(Request $request, $id)
+    {
+        $currentUser = $this->getCurrentUser();
+        $targetUser = User::findOrFail($id);
+        
+        $request->validate([
+            'rating' => 'required|integer|min:1|max:5'
+        ]);
+
+        $currentUser->rate($targetUser, $request->rating);
+
+        return redirect()->back()->with('success', 'User rated successfully!');
+    }
+
+    public function manageGroups()
+    {
+        $currentUser = $this->getCurrentUser();
+        $friends = $currentUser->getFriends();
+        
+        $availableGroups = array_keys(config('acquaintances.friendships_groups', [
+            'acquaintances' => 0,
+            'close_friends' => 1,
+            'family' => 2
+        ]));
+
+        $groupedFriends = [];
+        foreach ($availableGroups as $group) {
+            $groupedFriends[$group] = $currentUser->getFriends(0, $group);
+        }
+        
+        return view('manage-groups', compact('currentUser', 'friends', 'availableGroups', 'groupedFriends'));
+    }
+
+    public function addFriendToGroup(Request $request)
+    {
+        $currentUser = $this->getCurrentUser();
+        $request->validate([
+            'friend_id' => 'required|integer',
+            'group_name' => 'required|string|max:50'
+        ]);
+
+        $friend = User::findOrFail($request->friend_id);
+        $currentUser->groupFriend($friend, $request->group_name);
+
+        return redirect()->back()->with('success', 'Friend added to group successfully!');
+    }
+
+    public function removeFriendFromGroup(Request $request)
+    {
+        $currentUser = $this->getCurrentUser();
+        $request->validate([
+            'friend_id' => 'required|integer',
+            'group_name' => 'required|string|max:50'
+        ]);
+
+        $friend = User::findOrFail($request->friend_id);
+        $currentUser->ungroupFriend($friend, $request->group_name);
+
+        return redirect()->back()->with('success', 'Friend removed from group!');
+    }
+
     public function sendRequest($id)
     {
         $user1 = $this->getCurrentUser();
@@ -147,8 +200,6 @@ class AcquaintanceController extends Controller
         return redirect()->back()->with('success', $user2->name . ' removed from friends');
     }
 
-    // ========== FOLLOW METHODS ==========
-    
     public function followUser($id)
     {
         $user1 = $this->getCurrentUser();
@@ -175,8 +226,6 @@ class AcquaintanceController extends Controller
         return redirect()->back()->with('success', 'Unfollowed ' . $user2->name);
     }
 
-    // ========== LIKE METHODS ==========
-    
     public function likeUser($id)
     {
         $user1 = $this->getCurrentUser();
@@ -203,8 +252,6 @@ class AcquaintanceController extends Controller
         return redirect()->back()->with('success', 'Unliked ' . $user2->name);
     }
 
-    // ========== BLOCK METHODS ==========
-    
     public function blockUser($id)
     {
         $user1 = $this->getCurrentUser();
@@ -231,8 +278,6 @@ class AcquaintanceController extends Controller
         return redirect()->back()->with('success', 'Unblocked ' . $user2->name);
     }
 
-    // ========== LIST METHODS ==========
-    
     public function friendList()
     {
         $currentUser = $this->getCurrentUser();
@@ -246,7 +291,7 @@ class AcquaintanceController extends Controller
     {
         $currentUser = $this->getCurrentUser();
         return view('following-list', [
-            'followings' => $currentUser->getFollowings(),
+            'followings' => $currentUser->followings,
             'current_user' => $currentUser
         ]);
     }
@@ -255,7 +300,7 @@ class AcquaintanceController extends Controller
     {
         $currentUser = $this->getCurrentUser();
         return view('followers-list', [
-            'followers' => $currentUser->getFollowers(),
+            'followers' => $currentUser->followers,
             'current_user' => $currentUser
         ]);
     }
@@ -305,41 +350,41 @@ class AcquaintanceController extends Controller
             return response()->json(['error' => 'User not found'], 404);
         }
         
+        $friendship = $user1->getFriendship($user2);
+        
         return response()->json([
             'user' => $user2->name,
             'is_friend' => $user1->isFriendWith($user2),
             'is_following' => $user1->isFollowing($user2),
             'is_liked' => $user1->hasLiked($user2),
-            'is_blocked' => $user1->isBlocked($user2),
-            'friend_request_status' => $user1->getFriendshipStatus($user2),
+            'is_blocked' => $user1->hasBlocked($user2),
+            'friend_request_status' => $friendship ? $friendship->status : 'none',
         ]);
     }
     
-    /**
-     * Get friend suggestions based on followers of followed users
-     */
     private function getFriendSuggestionsData()
     {
         $currentUser = $this->getCurrentUser();
-        $suggestions = collect();
-        
-        // Get users that current user is following
-        $followings = $currentUser->getFollowings();
-        
-        foreach ($followings as $following) {
-            // Get followers of each followed user
-            $followersOfFollowing = $following->getFollowers();
-            foreach ($followersOfFollowing as $potentialFriend) {
-                // Exclude current user and existing friends
-                if ($potentialFriend->id != $currentUser->id && 
-                    !$currentUser->isFriendWith($potentialFriend) &&
-                    !$currentUser->hasSentFriendRequestTo($potentialFriend)) {
-                    $suggestions->push($potentialFriend);
-                }
+        $allUsers = User::where('id', '!=', $currentUser->id)->get();
+        $suggestions = [];
+
+        foreach ($allUsers as $otherUser) {
+            if ($currentUser->isFriendWith($otherUser) || 
+                $currentUser->hasSentFriendRequestTo($otherUser) || 
+                $currentUser->hasFriendRequestFrom($otherUser) || 
+                $currentUser->hasBlocked($otherUser)) {
+                continue;
             }
+
+            $mutualFriends = $currentUser->getMutualFriends($otherUser);
+            $otherUser->mutual_count = count($mutualFriends);
+            $suggestions[] = $otherUser;
         }
-        
-        // Remove duplicates and limit to 10
-        return $suggestions->unique('id')->take(10)->values();
+
+        usort($suggestions, function($a, $b) {
+            return $b->mutual_count <=> $a->mutual_count;
+        });
+
+        return collect($suggestions)->take(5);
     }
 }

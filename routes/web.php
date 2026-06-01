@@ -32,3 +32,8 @@ Route::get('/user-status/{id}', [AcquaintanceController::class, 'userStatus']);
 Route::get('/all-users', [AcquaintanceController::class, 'allUsers']);
 Route::get('/switch-user/{id}', [AcquaintanceController::class, 'switchUser']);
 Route::get('/current-user', [AcquaintanceController::class, 'currentUser']);
+
+Route::get('/rate-user/{id}', [AcquaintanceController::class, 'rateUser']);
+Route::get('/manage-groups', [AcquaintanceController::class, 'manageGroups']);
+Route::get('/add-friend-group', [AcquaintanceController::class, 'addFriendToGroup']);
+Route::get('/remove-friend-group', [AcquaintanceController::class, 'removeFriendFromGroup']);
